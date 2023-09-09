@@ -1,11 +1,15 @@
 mod components;
+mod dqn;
 
 use crate::components::*;
+use crate::dqn::*;
 use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
+use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use rand::prelude::*;
 
 pub const WINDOW_WIDTH: f32 = 1280.0;
 pub const WINDOW_HEIGHT: f32 = 720.0;
+pub const CENTER_REWARD_FACTOR: f32 = 100.0;
 pub const N_OBSTACLES: usize = 10;
 pub const SPAWN_X_POINT: f32 = 400.0;
 pub const DESPAWN_X_POINT: f32 = -400.0;
@@ -16,20 +20,21 @@ pub const SENSOR_COUNT: usize = 3;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
-        .add_systems(
-            Startup,
-            (set_window_size, setup, spawn_obstacle, spawn_agent),
-        )
+        .add_plugins((DefaultPlugins, EguiPlugin))
+        .insert_resource(GuiParameters::default())
+        .add_systems(Startup, (set_window_size, setup, spawn_obstacle))
         .add_systems(
             Update,
             (
                 move_obstacles,
-                //despawn_obstacles,
                 move_agent,
-                debug_mover,
+                //debug_mover,
                 update_sensors,
-                debug_distance,
+                //debug_distance,
+                dqn_logic,
+                update_fitness,
+                update_gui,
+                spawn_agent,
             ),
         )
         .run();
@@ -43,7 +48,11 @@ fn spawn_agent(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    mut params: ResMut<GuiParameters>,
 ) {
+    if !params.start {
+        return;
+    }
     let mut temp_sensors: Vec<Sensor> = Vec::new();
     for _ in 0..SENSOR_COUNT {
         temp_sensors.push(Sensor::default());
@@ -68,7 +77,13 @@ fn spawn_agent(
         Sensors {
             sensors: temp_sensors.clone(),
         },
+        DeepQN::new(
+            NeuralNetwork::initialize(vec![6, 24, 48, 24, 4], sigmoid),
+            NeuralNetwork::initialize(vec![6, 24, 48, 24, 4], sigmoid),
+            &params,
+        ),
     ));
+    params.start = false;
 }
 
 fn set_window_size(mut window: Query<&mut Window>) {
@@ -145,34 +160,82 @@ fn move_agent(
     time: Res<Time>,
 ) {
     for (mut transform, velocity, actions, _) in query.iter_mut() {
-        if actions.right < -0.33 {
-            transform.translation.x -= velocity.speed.x * time.delta_seconds();
-        } else if actions.right > 0.33 {
+        if actions.right == 1.0 && transform.translation.x < WINDOW_WIDTH / 2.0 - AGENT_SIZE.x / 2.0
+        {
             transform.translation.x += velocity.speed.x * time.delta_seconds();
         }
-
-        if actions.up < -0.33 {
-            transform.translation.y -= velocity.speed.y * time.delta_seconds();
-        } else if actions.up > 0.33 {
+        if actions.left == 1.0 && transform.translation.x > -WINDOW_WIDTH / 2.0 + AGENT_SIZE.x / 2.0
+        {
+            transform.translation.x -= velocity.speed.x * time.delta_seconds();
+        }
+        if actions.up == 1.0 && transform.translation.y < WINDOW_HEIGHT / 2.0 - AGENT_SIZE.y / 2.0 {
             transform.translation.y += velocity.speed.y * time.delta_seconds();
+        }
+        if actions.down == 1.0
+            && transform.translation.y > -WINDOW_HEIGHT / 2.0 + AGENT_SIZE.y / 2.0
+        {
+            transform.translation.y -= velocity.speed.y * time.delta_seconds();
         }
     }
 }
 
-fn debug_mover(mut query: Query<(&mut Transform, &Velocity, &mut Actions, With<Agent>)>) {
-    let mut rng = thread_rng();
-    for (_transform, _velocity, mut actions, _) in query.iter_mut() {
-        actions.up = rng.gen_range(-1.0..1.0);
-        actions.right = rng.gen_range(-1.0..1.0);
-    }
-}
-
-fn debug_distance(query: Query<(&Sensors, With<Agent>)>) {
+fn _debug_distance(query: Query<(&Sensors, With<Agent>)>) {
     for (sensors, _) in query.iter() {
         println!("D1 = {}", sensors.sensors[0].distance);
         println!("D2 = {}", sensors.sensors[1].distance);
         println!("D3 = {}", sensors.sensors[2].distance)
     }
+}
+
+fn update_gui(mut egui_ctx: EguiContexts, mut gui_parameters: ResMut<GuiParameters>) {
+    egui::Window::new("Parameters").show(egui_ctx.ctx_mut(), |ui| {
+        ui.horizontal(|ui| {
+            ui.label("Replay Buffer Size");
+            ui.add(egui::Slider::new(
+                &mut gui_parameters.replay_buffer_size,
+                100..=10000,
+            ));
+        });
+        ui.horizontal(|ui| {
+            ui.label("Batch Size");
+            ui.add(egui::Slider::new(&mut gui_parameters.batch_size, 1..=1000));
+        });
+        ui.horizontal(|ui| {
+            ui.label("Gamma");
+            ui.add(egui::Slider::new(&mut gui_parameters.gamma, 0.0..=1.0));
+        });
+        ui.horizontal(|ui| {
+            ui.label("Epsilon Start");
+            ui.add(egui::Slider::new(
+                &mut gui_parameters.epsilon_start,
+                0.0..=1.0,
+            ));
+        });
+        ui.horizontal(|ui| {
+            ui.label("Epsilon End");
+            ui.add(egui::Slider::new(
+                &mut gui_parameters.epsilon_end,
+                0.0..=1.0,
+            ));
+        });
+        ui.horizontal(|ui| {
+            ui.label("Epsilon Decay");
+            ui.add(egui::Slider::new(
+                &mut gui_parameters.epsilon_decay,
+                0.0..=1.0,
+            ));
+        });
+        ui.horizontal(|ui| {
+            ui.label("Episode Size");
+            ui.add(egui::Slider::new(
+                &mut gui_parameters.episode_size,
+                1..=1000,
+            ));
+        });
+        if ui.button("Start").clicked() {
+            gui_parameters.start = true;
+        }
+    });
 }
 
 // Updates sensors reading. Sensors are sorted by distance
@@ -211,6 +274,98 @@ fn update_sensors(
                     break;
                 }
             }
+        }
+    }
+}
+
+pub fn update_fitness(mut query: Query<(&mut Fitness, &Sensors, &mut Transform, With<Agent>)>) {
+    // Constants for the fitness function
+    const EDGE_PENALTY_FACTOR: f32 = 2.5;
+    const OBSTACLE_PENALTY_FACTOR: f32 = 100.0;
+    const EPSILON: f32 = 1e-6;
+
+    for (mut fitness, sensors, transform, _) in query.iter_mut() {
+        // Base fitness
+        fitness.score = 1.0;
+
+        // Penalty for proximity to obstacles
+        for sensor in sensors.sensors.iter() {
+            let obstacle_penalty = OBSTACLE_PENALTY_FACTOR / (sensor.distance + EPSILON);
+            fitness.score -= obstacle_penalty;
+        }
+
+        // Penalty for proximity to edges
+        let x_distance_to_edge = (WINDOW_WIDTH / 2.0 - transform.translation.x.abs()).max(EPSILON);
+        let y_distance_to_edge = (WINDOW_HEIGHT / 2.0 - transform.translation.y.abs()).max(EPSILON);
+
+        let edge_penalty_x = EDGE_PENALTY_FACTOR / x_distance_to_edge;
+        let edge_penalty_y = EDGE_PENALTY_FACTOR / y_distance_to_edge;
+
+        fitness.score -= edge_penalty_x;
+        fitness.score -= edge_penalty_y;
+
+        // Ensure the fitness score remains non-negative
+        fitness.score = fitness.score.max(0.0);
+        fitness.score = transform.translation.y.max(0.0);
+    }
+}
+
+pub fn dqn_logic(
+    mut agent_query: Query<(&Agent, &mut DeepQN, &Fitness, &mut Actions, &Sensors)>,
+    time: Res<Time>,
+    params: Res<GuiParameters>,
+) {
+    for (_agent, mut dqn, fitness, mut actions, sensors) in agent_query.iter_mut() {
+        let state: Vec<f32> = sensors
+            .sensors
+            .iter()
+            .flat_map(|s| vec![s.distance, s.direction])
+            .collect();
+
+        let action_index = dqn.choose_action(&state);
+        match action_index {
+            0 => {
+                actions.up = 1.0;
+                actions.down = 0.0;
+                actions.left = 0.0;
+                actions.right = 0.0;
+            }
+            1 => {
+                actions.up = -1.0;
+                actions.down = 1.0;
+                actions.left = 0.0;
+                actions.right = 0.0;
+            }
+            2 => {
+                actions.up = 0.0;
+                actions.down = 0.0;
+                actions.left = 0.0;
+                actions.right = 1.0;
+            }
+            3 => {
+                actions.up = 0.0;
+                actions.down = 0.0;
+                actions.left = 1.0;
+                actions.right = -1.0;
+            }
+            _ => {}
+        }
+
+        // Storing experience and training
+        let reward = fitness.score * time.delta_seconds();
+        let next_state: Vec<f32> = sensors
+            .sensors
+            .iter()
+            .flat_map(|s| vec![s.distance, s.direction])
+            .collect();
+
+        let done = false; // This can be set to true if some end condition is met
+        dqn.store_experience(state, action_index, reward, next_state, done, &params);
+        dqn.train(0.001, &params);
+        dqn.update_epsilon(&params);
+
+        if dqn.training_counter % params.episode_size == 0 {
+            dqn.update_target_network();
         }
     }
 }
