@@ -77,3 +77,53 @@ impl Layer {
             .collect()
     }
 }
+
+pub fn crossover(parent1: NeuralNetwork, parent2: NeuralNetwork) -> NeuralNetwork {
+    let mut child = parent1.clone();
+    for (layer_child, (layer_p1, layer_p2)) in child
+        .layers
+        .iter_mut()
+        .zip(parent1.layers.iter().zip(&parent2.layers))
+    {
+        for (weight_child, (weight_p1, weight_p2)) in layer_child
+            .weights
+            .iter_mut()
+            .zip(layer_p1.weights.iter().zip(&layer_p2.weights))
+        {
+            // Average weights
+            for (w_child, (w_p1, w_p2)) in
+                weight_child.iter_mut().zip(weight_p1.iter().zip(weight_p2))
+            {
+                *w_child = (*w_p1 + *w_p2) / 2.0;
+            }
+            // Average biases
+            for (bias_child, (bias_p1, bias_p2)) in layer_child
+                .biases
+                .iter_mut()
+                .zip(layer_p1.biases.iter().zip(&layer_p2.biases))
+            {
+                *bias_child = (*bias_p1 + *bias_p2) / 2.0;
+            }
+        }
+    }
+    child
+}
+
+pub fn mutate(nn: &mut NeuralNetwork, mutation_probability: f32, mutation_rate: f32) {
+    let mut rng = rand::thread_rng();
+    let should_mutate = rng.gen::<f32>() < mutation_probability;
+    for layer in &mut nn.layers {
+        for weight in &mut layer.weights {
+            for w in weight.iter_mut() {
+                if should_mutate {
+                    *w += rng.gen_range(-mutation_rate..mutation_rate);
+                }
+            }
+        }
+        for bias in layer.biases.iter_mut() {
+            if should_mutate {
+                *bias += rng.gen_range(-mutation_rate..mutation_rate);
+            }
+        }
+    }
+}

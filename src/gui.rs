@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 
+use crate::neural_network::NeuralNetwork;
+
 pub const WINDOW_WIDTH: f32 = 1280.0;
 pub const WINDOW_HEIGHT: f32 = 720.0;
 pub const GAP_WIDTH: f32 = 100.0;
@@ -14,27 +16,47 @@ pub struct GuiParameters {
     pub force_scaling: f32,
     pub passed_time_since_start: f32,
     pub passed_time_since_last_pipe: f32,
-    pub population_size: usize,
-    pub dead_bird_count: usize,
-    pub best_generation_score: f32,
-    pub best_fitness: f32,
+    pub population_size: usize,     // Number of birds in population
+    pub dead_bird_count: usize,     // Check if all birds are dead
+    pub best_generation_score: f32, // For display
+    pub best_fitness: f32,          // For display
+    pub generation_dead: bool, // True if entire population is dead. Then a new population can be spawned
+    pub mutation_rate: f32,    // Rate of mutation (factor to scale with, positive or negative)
+    pub mutation_probability: f32, // Probability of mutation happening to weight
+    pub current_generation: usize,
+    pub number_of_visible_bird: usize,
 }
 
 impl Default for GuiParameters {
     fn default() -> Self {
         Self {
-            force_scaling: 20.0,
+            force_scaling: 45.0,
             passed_time_since_start: 0.0,
             passed_time_since_last_pipe: 10000.0,
-            population_size: 20,
+            population_size: 100,
             dead_bird_count: 0,
             best_generation_score: 0.0,
             best_fitness: 0.0,
+            generation_dead: false,
+            mutation_rate: 0.225,
+            mutation_probability: 0.5,
+            current_generation: 0,
+            number_of_visible_bird: 100,
         }
     }
 }
 
 #[derive(Clone, Debug, Resource)]
+pub struct BestBirds {
+    pub best_neural_network: NeuralNetwork,
+    pub second_best_neural_network: NeuralNetwork,
+    pub best_score: f32,
+    pub second_best_score: f32,
+    pub best_fitness: f32,
+    pub second_best_fitness: f32,
+}
+
+#[derive(Clone, Debug, Component)]
 pub struct Environment {
     pub horizontal_distance: f32,
     pub vertical_gap_position: f32,
@@ -56,6 +78,61 @@ pub fn update_gui(mut egui_ctx: EguiContexts, mut gui_parameters: ResMut<GuiPara
             ui.add(egui::Slider::new(
                 &mut gui_parameters.force_scaling,
                 1.0..=50.0,
+            ));
+        });
+
+        ui.label(format!(
+            "Passed Time Since Start: {:.2}",
+            gui_parameters.passed_time_since_start
+        ));
+        ui.label(format!(
+            "Passed Time Since Last Pipe: {:.2}",
+            gui_parameters.passed_time_since_last_pipe
+        ));
+        // set population size
+        ui.horizontal(|ui| {
+            ui.label("Population Size");
+            ui.add(egui::Slider::new(
+                &mut gui_parameters.population_size,
+                1..=100,
+            ));
+        });
+        ui.label(format!(
+            "Dead Bird Count: {}",
+            gui_parameters.dead_bird_count
+        ));
+        ui.label(format!(
+            "Best Generation Score: {:.2}",
+            gui_parameters.best_generation_score
+        ));
+        ui.label(format!("Best Fitness: {:.2}", gui_parameters.best_fitness));
+        ui.label(format!(
+            "Current Generation: {}",
+            gui_parameters.current_generation
+        ));
+        // set mutation rate
+        ui.horizontal(|ui| {
+            ui.label("Mutation Rate");
+            ui.add(egui::Slider::new(
+                &mut gui_parameters.mutation_rate,
+                -1.0..=1.0,
+            ));
+        });
+        //set mutation probability
+        ui.horizontal(|ui| {
+            ui.label("Mutation Probability");
+            ui.add(egui::Slider::new(
+                &mut gui_parameters.mutation_probability,
+                0.0..=1.0,
+            ));
+        });
+        // set visible bird
+        let max_bird_count = gui_parameters.population_size;
+        ui.horizontal(|ui| {
+            ui.label("Visible Birds");
+            ui.add(egui::Slider::new(
+                &mut gui_parameters.number_of_visible_bird,
+                1..=max_bird_count,
             ));
         });
     });
