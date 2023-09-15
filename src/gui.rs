@@ -8,7 +8,7 @@ pub const WINDOW_HEIGHT: f32 = 720.0;
 pub const GAP_WIDTH: f32 = 100.0;
 pub const PIPE_VELOCITY: f32 = 200.0;
 pub const PIPE_WIDTH: f32 = 50.0;
-pub const BIRD_SIZE: f32 = 25.0;
+pub const BIRD_SIZE: f32 = 15.0;
 pub const SPAWN_X_POINT: f32 = -300.0;
 
 #[derive(Clone, Debug, Resource)]
@@ -38,7 +38,7 @@ impl Default for GuiParameters {
             best_generation_score: 0.0,
             best_fitness: 0.0,
             generation_dead: false,
-            mutation_rate: 0.225,
+            mutation_rate: 0.125,
             mutation_probability: 0.5,
             current_generation: 0,
             number_of_visible_bird: 100,

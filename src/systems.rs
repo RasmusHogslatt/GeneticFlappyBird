@@ -9,7 +9,7 @@ use bevy::sprite::collide_aabb::Collision;
 use bevy::sprite::MaterialMesh2dBundle;
 
 pub const GRAVITY: f32 = 9.82;
-pub const JUMP_FORCE: f32 = 8.0;
+pub const JUMP_FORCE: f32 = 4.0;
 
 pub fn gravity_system(mut query: Query<&mut Bird>, time: Res<Time>) {
     for mut bird in query.iter_mut() {
@@ -74,7 +74,7 @@ pub fn check_collision(
                 bird_transform.translation,
                 Vec2::new(BIRD_SIZE, BIRD_SIZE),
                 pipe_transform.translation,
-                Vec2::new(PIPE_WIDTH, WINDOW_HEIGHT / 2.0),
+                Vec2::new(PIPE_WIDTH, WINDOW_HEIGHT),
             );
 
             if let Some(collision) = collision {

@@ -61,8 +61,6 @@ fn main() {
 
 /* SCORING */
 // Score += 0.5 per top and bottom half: f32 1.0 per pipe
-// Collision: Death --> Only train birds alive
-// Save last two birds' neural network for spawning next generation (those are the last two alive)
 
 fn setup(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
@@ -126,8 +124,8 @@ fn spawn_pipe(
     params.passed_time_since_last_pipe = 0.0;
     let mut rng = rand::thread_rng();
     let gc = rng.gen_range((-WINDOW_HEIGHT / 2.0 + GAP_WIDTH)..(WINDOW_HEIGHT / 2.0 - GAP_WIDTH));
-    let y_pos1 = gc - WINDOW_HEIGHT / 2.0 + GAP_WIDTH;
-    let y_pos2 = gc + WINDOW_HEIGHT / 2.0 - GAP_WIDTH;
+    let y_pos1 = gc - WINDOW_HEIGHT / 2.0 - GAP_WIDTH / 2.0;
+    let y_pos2 = gc + WINDOW_HEIGHT / 2.0 + GAP_WIDTH / 2.0;
     commands.spawn((
         Pipe {
             velocity: -PIPE_VELOCITY,
@@ -139,7 +137,7 @@ fn spawn_pipe(
             mesh: meshes.add(Mesh::from(shape::Quad::default())).into(),
             transform: Transform {
                 translation: Vec3::new(WINDOW_WIDTH / 2.0 - PIPE_WIDTH, y_pos1, 0.0),
-                scale: Vec3::new(PIPE_WIDTH, WINDOW_HEIGHT / 2.0, 0.0),
+                scale: Vec3::new(PIPE_WIDTH, WINDOW_HEIGHT, 0.0),
                 ..Default::default()
             },
             material: materials.add(ColorMaterial::from(Color::GREEN)),
@@ -157,7 +155,7 @@ fn spawn_pipe(
             mesh: meshes.add(Mesh::from(shape::Quad::default())).into(),
             transform: Transform {
                 translation: Vec3::new(WINDOW_WIDTH / 2.0 - PIPE_WIDTH, y_pos2, 0.0),
-                scale: Vec3::new(PIPE_WIDTH, WINDOW_HEIGHT / 2.0, 0.0),
+                scale: Vec3::new(PIPE_WIDTH, WINDOW_HEIGHT, 0.0),
                 ..Default::default()
             },
             material: materials.add(ColorMaterial::from(Color::GREEN)),
