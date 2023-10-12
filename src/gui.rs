@@ -1,30 +1,34 @@
 use bevy::prelude::*;
-use bevy_egui::{egui, EguiContexts};
+use bevy_egui::{
+    egui::{self, Color32, RichText},
+    EguiContexts,
+};
 
 use crate::neural_network::NeuralNetwork;
 
 pub const WINDOW_WIDTH: f32 = 1280.0;
 pub const WINDOW_HEIGHT: f32 = 720.0;
-pub const GAP_WIDTH: f32 = 100.0;
+pub const GAP_WIDTH: f32 = 125.0;
 pub const PIPE_VELOCITY: f32 = 200.0;
 pub const PIPE_WIDTH: f32 = 50.0;
 pub const BIRD_SIZE: f32 = 15.0;
 pub const SPAWN_X_POINT: f32 = -300.0;
+pub const POPULATION_SIZE: usize = 400;
 
 #[derive(Clone, Debug, Resource)]
 pub struct GuiParameters {
     pub force_scaling: f32,
     pub passed_time_since_start: f32,
     pub passed_time_since_last_pipe: f32,
-    pub population_size: usize,     // Number of birds in population
-    pub dead_bird_count: usize,     // Check if all birds are dead
-    pub best_generation_score: f32, // For display
-    pub best_fitness: f32,          // For display
+    pub population_size: usize,    // Number of birds in population
+    pub dead_bird_count: usize,    // Check if all birds are dead
+    pub current_score: f32,        // For display
     pub generation_dead: bool, // True if entire population is dead. Then a new population can be spawned
     pub mutation_rate: f32,    // Rate of mutation (factor to scale with, positive or negative)
     pub mutation_probability: f32, // Probability of mutation happening to weight
     pub current_generation: usize,
     pub number_of_visible_bird: usize,
+    pub start_training: bool,
 }
 
 impl Default for GuiParameters {
@@ -33,15 +37,15 @@ impl Default for GuiParameters {
             force_scaling: 45.0,
             passed_time_since_start: 0.0,
             passed_time_since_last_pipe: 10000.0,
-            population_size: 100,
+            population_size: POPULATION_SIZE,
             dead_bird_count: 0,
-            best_generation_score: 0.0,
-            best_fitness: 0.0,
+            current_score: 0.0,
             generation_dead: false,
             mutation_rate: 0.125,
             mutation_probability: 0.5,
             current_generation: 0,
-            number_of_visible_bird: 100,
+            number_of_visible_bird: POPULATION_SIZE,
+            start_training: false,
         }
     }
 }
@@ -71,45 +75,61 @@ impl Default for Environment {
     }
 }
 
-pub fn update_gui(mut egui_ctx: EguiContexts, mut gui_parameters: ResMut<GuiParameters>) {
+pub fn update_gui(
+    mut egui_ctx: EguiContexts,
+    mut gui_parameters: ResMut<GuiParameters>,
+    best_birds: ResMut<BestBirds>,
+) {
     egui::Window::new("Parameters").show(egui_ctx.ctx_mut(), |ui| {
-        ui.horizontal(|ui| {
-            ui.label("Force Scaling");
-            ui.add(egui::Slider::new(
-                &mut gui_parameters.force_scaling,
-                1.0..=50.0,
-            ));
-        });
-
+        if ui.button("Start training").clicked() {
+            gui_parameters.start_training = !gui_parameters.start_training;
+        }
         ui.label(format!(
-            "Passed Time Since Start: {:.2}",
+            "Time since start: {:.2}",
             gui_parameters.passed_time_since_start
         ));
-        ui.label(format!(
-            "Passed Time Since Last Pipe: {:.2}",
-            gui_parameters.passed_time_since_last_pipe
-        ));
-        // set population size
         ui.horizontal(|ui| {
             ui.label("Population Size");
             ui.add(egui::Slider::new(
                 &mut gui_parameters.population_size,
-                1..=100,
+                1..=400,
             ));
         });
-        ui.label(format!(
-            "Dead Bird Count: {}",
-            gui_parameters.dead_bird_count
-        ));
-        ui.label(format!(
-            "Best Generation Score: {:.2}",
-            gui_parameters.best_generation_score
-        ));
-        ui.label(format!("Best Fitness: {:.2}", gui_parameters.best_fitness));
+        // ui.horizontal(|ui| {
+        //     ui.label("Force Scaling");
+        //     ui.add(egui::Slider::new(
+        //         &mut gui_parameters.force_scaling,
+        //         1.0..=50.0,
+        //     ));
+        // });
+
+        // set population size
+        ui.label(
+            RichText::new(format!(
+                "Dead Bird Count: {}",
+                gui_parameters.dead_bird_count
+            ))
+            .color(Color32::RED),
+        );
         ui.label(format!(
             "Current Generation: {}",
             gui_parameters.current_generation
         ));
+        ui.label(
+            RichText::new(format!("Best Score: {:.2}", best_birds.best_score).to_string())
+                .color(Color32::GREEN),
+        );
+        ui.label(
+            RichText::new(format!("Best Fitness: {:.2}", best_birds.best_fitness))
+                .color(Color32::GREEN),
+        );
+        ui.label(
+            RichText::new(format!(
+                "Current Score: {:.2}",
+                gui_parameters.current_score
+            ))
+            .color(Color32::YELLOW),
+        );
         // set mutation rate
         ui.horizontal(|ui| {
             ui.label("Mutation Rate");
@@ -127,13 +147,13 @@ pub fn update_gui(mut egui_ctx: EguiContexts, mut gui_parameters: ResMut<GuiPara
             ));
         });
         // set visible bird
-        let max_bird_count = gui_parameters.population_size;
-        ui.horizontal(|ui| {
-            ui.label("Visible Birds");
-            ui.add(egui::Slider::new(
-                &mut gui_parameters.number_of_visible_bird,
-                1..=max_bird_count,
-            ));
-        });
+        // let max_bird_count = gui_parameters.population_size;
+        // ui.horizontal(|ui| {
+        //     ui.label("Visible Birds");
+        //     ui.add(egui::Slider::new(
+        //         &mut gui_parameters.number_of_visible_bird,
+        //         1..=max_bird_count,
+        //     ));
+        // });
     });
 }

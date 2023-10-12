@@ -11,13 +11,15 @@ use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
 use bevy_egui::EguiPlugin;
 use rand::prelude::*;
 
+pub const network_size: [usize; 5] = [4, 3, 3, 2, 1];
+
 fn main() {
     App::new()
         .add_plugins((DefaultPlugins, EguiPlugin))
         .insert_resource(GuiParameters::default())
         .insert_resource(BestBirds {
-            best_neural_network: NeuralNetwork::new(&[4, 3, 1]),
-            second_best_neural_network: NeuralNetwork::new(&[4, 3, 1]),
+            best_neural_network: NeuralNetwork::new(&network_size),
+            second_best_neural_network: NeuralNetwork::new(&network_size),
             best_score: 0.0,
             second_best_score: 0.0,
             best_fitness: 0.0,
@@ -38,7 +40,8 @@ fn main() {
                 update_environment_state,
                 update_fitness,
                 check_collision,
-                generate_next_generation,
+                //generate_next_generation,
+                generate_next_generation_thirds,
             ),
         )
         .run();
@@ -89,7 +92,7 @@ fn spawn_bird(
                 score: 0.0,
                 fitness: 0.0,
                 dead: false,
-                neural_network: NeuralNetwork::new(&[4, 3, 1]),
+                neural_network: NeuralNetwork::new(&network_size),
             },
             Environment::default(),
         ));
@@ -97,19 +100,20 @@ fn spawn_bird(
 }
 
 pub fn update_my_time(mut params: ResMut<GuiParameters>, time: Res<Time>) {
+    if !params.start_training {
+        return;
+    }
     params.passed_time_since_start += time.delta_seconds();
     params.passed_time_since_last_pipe += time.delta_seconds();
 }
 
-pub fn update_fitness(
-    mut query: Query<&mut Bird>,
-    time: Res<Time>,
-    mut params: ResMut<GuiParameters>,
-) {
+pub fn update_fitness(mut query: Query<&mut Bird>, time: Res<Time>, params: ResMut<GuiParameters>) {
+    if !params.start_training {
+        return;
+    }
     for mut bird in query.iter_mut() {
         bird.fitness += time.delta_seconds();
     }
-    params.best_fitness += time.delta_seconds();
 }
 
 fn spawn_pipe(
@@ -118,7 +122,7 @@ fn spawn_pipe(
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut params: ResMut<GuiParameters>,
 ) {
-    if params.passed_time_since_last_pipe < 3.0 {
+    if params.passed_time_since_last_pipe < 3.0 || !params.start_training {
         return;
     }
     params.passed_time_since_last_pipe = 0.0;
@@ -162,7 +166,6 @@ fn spawn_pipe(
             ..default()
         },
     ));
-    println!("Spawned pipe!");
 }
 
 pub fn despawn_pipe(
@@ -194,6 +197,9 @@ pub fn update_environment_state(
 
     mut params: ResMut<GuiParameters>,
 ) {
+    if !params.start_training {
+        return;
+    }
     for (bird_transform, mut bird, mut environment) in bird_query.iter_mut() {
         let mut nearest_pipe_dist: f32 = f32::MAX;
         let mut nearest_pipe_vertical_center: f32 = f32::MAX;
@@ -201,7 +207,7 @@ pub fn update_environment_state(
             if pipe_transform.translation.x < bird_transform.translation.x && !pipe.bird_passed {
                 pipe.bird_passed = true;
                 bird.score += 0.5;
-                params.best_generation_score += 0.5;
+                params.current_score += 0.5;
                 continue; // Pipe is behind bird
             }
             let temporary_dist: f32 = pipe_transform.translation.x - bird_transform.translation.x;
@@ -213,8 +219,4 @@ pub fn update_environment_state(
         environment.horizontal_distance = nearest_pipe_dist;
         environment.vertical_gap_position = nearest_pipe_vertical_center;
     }
-    // println!(
-    //     "Horizontal distance: {}, Vertical gap center: {}",
-    //     nearest_pipe_dist, nearest_pipe_vertical_center
-    // );
 }

@@ -78,7 +78,8 @@ impl Layer {
     }
 }
 
-pub fn crossover(parent1: NeuralNetwork, parent2: NeuralNetwork) -> NeuralNetwork {
+// average of two parents
+pub fn crossover_average(parent1: NeuralNetwork, parent2: NeuralNetwork) -> NeuralNetwork {
     let mut child = parent1.clone();
     for (layer_child, (layer_p1, layer_p2)) in child
         .layers
